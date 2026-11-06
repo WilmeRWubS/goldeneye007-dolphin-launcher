@@ -1,4 +1,5 @@
-# Builds "GoldenEye 007.exe" with the .NET Framework C# compiler (ships with Windows).
+# Builds "GoldenEye 007.exe" (Wii Remote pointer) and "GoldenEye 007 (Mouse Look).exe" (PC-style
+# mouse look via memory injection) with the .NET Framework C# compiler (ships with Windows).
 # Usage: .\build.ps1 [-OutDir <folder>]   (default: ..\bin)
 param([string]$OutDir)
 $ErrorActionPreference = 'Stop'
@@ -44,11 +45,14 @@ if (-not (Test-Path $icon)) {
 $iconArg = @()
 if (Test-Path $icon) { $iconArg = @("/win32icon:$icon") }
 
-$sources = @((Join-Path $src 'Launcher.cs'), (Join-Path $src 'DolphinConfig.cs'))
+$sources = @((Join-Path $src 'Launcher.cs'), (Join-Path $src 'DolphinConfig.cs'), (Join-Path $src 'MouseInjector.cs'))
 $common = @('/nologo', '/optimize+', '/target:winexe', '/platform:anycpu',
     '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Management.dll') + $iconArg
 
-$exe = Join-Path $out 'GoldenEye 007.exe'
-& $csc @common "/out:$exe" @sources
-if ($LASTEXITCODE -ne 0) { throw "csc failed with exit code $LASTEXITCODE" }
-"Built $exe"
+foreach ($variant in @(@{ Name = 'GoldenEye 007.exe'; Define = @() },
+                       @{ Name = 'GoldenEye 007 (Mouse Look).exe'; Define = @('/define:MOUSELOOK') })) {
+    $exe = Join-Path $out $variant.Name
+    & $csc @common @($variant.Define) "/out:$exe" @sources
+    if ($LASTEXITCODE -ne 0) { throw "csc failed with exit code $LASTEXITCODE" }
+    "Built $exe"
+}

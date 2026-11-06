@@ -1,6 +1,8 @@
 // GoldenEye 007 (Wii, PAL) one-click launcher for Dolphin.
 // Boots the game directly in fullscreen with a keyboard + mouse setup.
-// Emulates a Wii Remote + Nunchuk: the hidden, window-locked mouse cursor drives the IR pointer.
+// Built twice: the default build emulates the Wii Remote pointer; the MOUSELOOK build emulates a
+// Classic Controller and runs MouseInjector, which writes raw mouse movement straight into the
+// player's yaw/pitch in game memory for PC-style aiming.
 //
 // Usage:
 //   "GoldenEye 007.exe"               start the game
@@ -10,13 +12,18 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Management;
 using System.Reflection;
 using System.Text;
 using System.Windows.Forms;
 
+#if MOUSELOOK
+[assembly: AssemblyTitle("GoldenEye 007 (Mouse Look)")]
+#else
 [assembly: AssemblyTitle("GoldenEye 007")]
+#endif
 [assembly: AssemblyProduct("GoldenEye 007 (Dolphin launcher)")]
 [assembly: AssemblyDescription("Boots GoldenEye 007 (Wii) in Dolphin with keyboard and mouse controls")]
 [assembly: AssemblyVersion("1.0.0.0")]
@@ -27,10 +34,18 @@ internal static class Program
     private const string AppName = "GoldenEye 007";
     private const string DefaultGamePath =
         @"C:\Users\Willy\Documents\007\GoldenEye 007 (Europe) (En,Fr,De,Es,It).wbfs";
+#if MOUSELOOK
+    private static readonly bool MouseLook = true;
+    private const string UserDirName = "GoldenEye007-MouseLook-User";
+#else
+    private static readonly bool MouseLook = false;
     private const string UserDirName = "GoldenEye007-User";
+#endif
+    // Shared by both builds; used to detect an already running instance of either.
+    private const string UserDirPrefix = "GoldenEye007-";
 
     // Bump when the generated Dolphin config changes so existing installs get the new defaults.
-    private const int ConfigVersion = 2;
+    private const int ConfigVersion = 3;
 
     [STAThread]
     private static int Main(string[] args)
@@ -85,10 +100,18 @@ internal static class Program
         }
 
         bool sixtyFps = GetBool(launcherIni, "SixtyFPS", true);
+        double sensitivity = GetDouble(launcherIni, "MouseSensitivity", 2.0);
+        double adsMultiplier = GetDouble(launcherIni, "MouseAdsMultiplier", 0.6);
+        bool invertY = GetBool(launcherIni, "MouseInvertY", false);
 
         launcherIni.Set("Launcher", "GamePath", gamePath);
         launcherIni.Set("Launcher", "NANDPath", nandPath);
         launcherIni.Set("Launcher", "SixtyFPS", sixtyFps ? "True" : "False");
+        launcherIni.Set("Launcher", "MouseSensitivity", Num(sensitivity));
+        launcherIni.Set("Launcher", "MouseAdsMultiplier", Num(adsMultiplier));
+        launcherIni.Set("Launcher", "MouseInvertY", invertY ? "True" : "False");
+        foreach (string old in new[] { "MouseLookSensitivity", "MouseLookSmoothing", "MouseLookDeadzone" })
+            launcherIni.Remove("Launcher", old);
         launcherIni.Save(settingsPath, LauncherIniHeader);
 
         Directory.CreateDirectory(configDir);
@@ -99,7 +122,7 @@ internal static class Program
 
         if (reset || installedVersion != ConfigVersion)
         {
-            DolphinConfig.WriteDefaults(userDir);
+            DolphinConfig.WriteDefaults(userDir, MouseLook);
             File.WriteAllText(versionFile, ConfigVersion.ToString());
         }
 
@@ -122,15 +145,20 @@ internal static class Program
         psi.Arguments = configure
             ? "-u " + Quote(userDir)
             : "-u " + Quote(userDir) + " -b -e " + Quote(gamePath);
-        Process.Start(psi);
+        Process dolphin = Process.Start(psi);
+        if (MouseLook && !configure && dolphin != null)
+            MouseInjector.Run(dolphin, sensitivity, adsMultiplier, invertY);
         return 0;
     }
 
     private const string LauncherIniHeader =
-        "; GoldenEye 007 launcher settings\r\n" +
+        "; GoldenEye 007 launcher settings (shared by both exes)\r\n" +
         "; GamePath = disc image to boot\r\n" +
         "; NANDPath = Wii save-data folder (defaults to your normal Dolphin install so saves are shared)\r\n" +
         "; SixtyFPS = True/False - 60 FPS code (may get you stuck in Archives vents; Tank timer becomes impossible)\r\n" +
+        "; MouseSensitivity = Mouse Look exe: same scale as CS/Source games (0.022 deg per mouse count x value)\r\n" +
+        "; MouseAdsMultiplier = sensitivity multiplier while holding right mouse (aim down sights)\r\n" +
+        "; MouseInvertY = True/False\r\n" +
         "; Run the exe with --configure to change controls/graphics in Dolphin's UI,\r\n" +
         "; or --reset to restore the launcher's default keyboard/mouse setup.\r\n";
 
@@ -138,6 +166,18 @@ internal static class Program
     {
         string v = ini.Get("Launcher", key, fallback ? "True" : "False");
         return string.Equals(v, "True", StringComparison.OrdinalIgnoreCase) || v == "1";
+    }
+
+    private static double GetDouble(Ini ini, string key, double fallback)
+    {
+        double v;
+        string s = ini.Get("Launcher", key, "").Replace(',', '.');
+        return double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v) && v >= 0 ? v : fallback;
+    }
+
+    private static string Num(double v)
+    {
+        return v.ToString("0.###", CultureInfo.InvariantCulture);
     }
 
     private static string DefaultNandPath()
@@ -157,7 +197,7 @@ internal static class Program
                 foreach (ManagementBaseObject p in searcher.Get())
                 {
                     var cmd = p["CommandLine"] as string;
-                    if (cmd != null && cmd.IndexOf(UserDirName, StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (cmd != null && cmd.IndexOf(UserDirPrefix, StringComparison.OrdinalIgnoreCase) >= 0)
                         return true;
                 }
             }
@@ -254,6 +294,16 @@ internal sealed class Ini
             lines[i] = entry;
         else
             lines.Add(entry);
+    }
+
+    public void Remove(string section, string key)
+    {
+        List<string> lines = Section(section, false);
+        if (lines == null)
+            return;
+        int i = Find(lines, key);
+        if (i >= 0)
+            lines.RemoveAt(i);
     }
 
     public void Save(string path, string header)

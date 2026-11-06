@@ -5,14 +5,14 @@ using System.Text;
 // Default Dolphin configuration written into the launcher's private user folder.
 internal static class DolphinConfig
 {
-    public static void WriteDefaults(string userDir)
+    public static void WriteDefaults(string userDir, bool mouseLook)
     {
         string configDir = Path.Combine(userDir, "Config");
         string gameSettingsDir = Path.Combine(userDir, "GameSettings");
         Directory.CreateDirectory(configDir);
         Directory.CreateDirectory(gameSettingsDir);
 
-        Write(configDir, "WiimoteNew.ini", WiimotePointer);
+        Write(configDir, "WiimoteNew.ini", mouseLook ? WiimoteMouseLook : WiimotePointer);
         Write(configDir, "Hotkeys.ini", Hotkeys);
         Write(configDir, "GFX.ini", Gfx);
         Write(gameSettingsDir, "SJBP52.ini", GameSettings);
@@ -111,6 +111,47 @@ Nunchuk/Tilt/Right = E
 Nunchuk/Shake/X = V | `Click 2`
 Nunchuk/Shake/Y = V | `Click 2`
 Nunchuk/Shake/Z = V | `Click 2`
+" + OtherWiimotes;
+
+    // Classic Controller (dual analog), matching GoldenEye's default "Goldfinger Pro" layout:
+    //   ZR fire, ZL aim down sight, L melee, R grenade, a crouch, b action/sprint, Y reload,
+    //   X cycle grenades, D-pad up firing mode, left/right cycle weapon, down smartphone,
+    //   - night vision/scoreboard, + pause. Camera look is written directly to game memory by\r
+    //   MouseInjector; the right stick is only a keyboard fallback (IJKL) for vehicles/turrets.
+    private const string WiimoteMouseLook =
+@"[Wiimote1]
+Device = DInput/0/Keyboard Mouse
+Source = 1
+Buttons/Home = HOME
+Extension = Classic
+Extension/Attach MotionPlus = False
+Classic/Buttons/A = LCONTROL | C | RETURN
+Classic/Buttons/B = LSHIFT | F | SPACE | BACK
+Classic/Buttons/X = H
+Classic/Buttons/Y = R
+Classic/Buttons/ZL = `Click 1`
+Classic/Buttons/ZR = `Click 0`
+Classic/Buttons/- = TAB | N
+Classic/Buttons/+ = ESCAPE
+Classic/Buttons/Home = HOME
+Classic/Triggers/L = V | `Click 2`
+Classic/Triggers/R = G
+Classic/Triggers/L-Analog = V | `Click 2`
+Classic/Triggers/R-Analog = G
+Classic/D-Pad/Up = B | UP
+Classic/D-Pad/Down = X | DOWN
+Classic/D-Pad/Left = `Axis Z-` | `Click 3` | `1` | LEFT
+Classic/D-Pad/Right = `Axis Z+` | `Click 4` | `2` | RIGHT
+Classic/Left Stick/Up = W
+Classic/Left Stick/Down = S
+Classic/Left Stick/Left = A
+Classic/Left Stick/Right = D
+Classic/Left Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42
+Classic/Right Stick/Up = I
+Classic/Right Stick/Down = K
+Classic/Right Stick/Left = J
+Classic/Right Stick/Right = L
+Classic/Right Stick/Calibration = 100.00 141.42 100.00 141.42 100.00 141.42 100.00 141.42
 " + OtherWiimotes;
 
     private const string OtherWiimotes =
