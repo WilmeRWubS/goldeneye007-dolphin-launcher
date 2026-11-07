@@ -11,7 +11,18 @@ There are two exes:
 | `GoldenEye 007.exe` | Wii Remote pointer. The mouse moves an on-screen crosshair, and the camera turns near the edges (Wii-like). |
 | `GoldenEye 007 (Mouse Look).exe` | **PC-style mouse look.** Raw mouse movement is written straight into the player's yaw/pitch in game memory: 1:1, with no stick dead zone, acceleration or turn-speed cap. |
 
+> [!NOTE]
+>
+> Made with OPUS and REA. Works but not tested fully. Mouse look makes weapons look weird/glitchy. Might fix with newer commits.
+
+## Goldeneye reloaded
+
+PR for playing the xbox 360 variant. Have been able to finish it on 007 classic.
+
+https://github.com/marinesciencedude/xenia-canary-mousehook/pull/109
+
 ## What it does
+
 - Starts Dolphin in batch mode (`-b -e <game>`). It uses its own Dolphin user folder (`GoldenEye007-User`, or
   `GoldenEye007-MouseLook-User` for Mouse Look) so your normal Dolphin settings aren't changed.
 - It shares the Wii save data (NAND) with your normal Dolphin install, so your progress carries over.
